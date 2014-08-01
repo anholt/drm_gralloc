@@ -38,9 +38,6 @@
 #include "gralloc_drm.h"
 #include "gralloc_drm_priv.h"
 
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
-#define ALIGN(val, align) (((val) + (align) - 1) & ~((align) - 1))
-
 struct fd_info {
 	struct gralloc_drm_drv_t base;
 
