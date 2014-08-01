@@ -32,28 +32,34 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <drm.h>
-#include <nouveau_drmif.h>
-#include <nouveau_channel.h>
-#include <nouveau_bo.h>
+#include <nouveau.h>
 
 #include "gralloc_drm.h"
 #include "gralloc_drm_priv.h"
 
-#define NVC0_TILE_HEIGHT(m) (8 << ((m) >> 4))
+#define NV_ARCH_03  0x03
+#define NV_ARCH_04  0x04
+#define NV_ARCH_10  0x10
+#define NV_ARCH_20  0x20
+#define NV_ARCH_30  0x30
+#define NV_ARCH_40  0x40
+#define NV_TESLA    0x50
+#define NV_FERMI    0xc0
+#define NV_KEPLER   0xe0
+#define NV_MAXWELL  0x110
 
-enum {
-	NvDmaFB = 0xd8000001,
-	NvDmaTT = 0xd8000002,
-};
+#define NV50_TILE_HEIGHT(m) (4 << ((m) >> 4))
+#define NVC0_TILE_HEIGHT(m) (8 << ((m) >> 4))
 
 struct nouveau_info {
 	struct gralloc_drm_drv_t base;
 
 	int fd;
+	uint32_t arch;
 	struct nouveau_device *dev;
-	struct nouveau_channel *chan;
-	int arch;
-	int tiled_scanout;
+	struct nouveau_client *client;
+	struct nouveau_object *channel;
+	struct nouveau_pushbuf *pushbuf;
 };
 
 struct nouveau_buffer {
@@ -66,67 +72,64 @@ static struct nouveau_bo *alloc_bo(struct nouveau_info *info,
 		int width, int height, int cpp, int usage, int *pitch)
 {
 	struct nouveau_bo *bo = NULL;
-	int flags, tile_mode, tile_flags;
+	union nouveau_bo_config cfg = {};
+	int flags;
 	int tiled, scanout;
 	unsigned int align;
 
 	flags = NOUVEAU_BO_MAP | NOUVEAU_BO_VRAM;
-	tile_mode = 0;
-	tile_flags = 0;
 
 	scanout = !!(usage & GRALLOC_USAGE_HW_FB);
 
 	tiled = !(usage & (GRALLOC_USAGE_SW_READ_OFTEN |
 			   GRALLOC_USAGE_SW_WRITE_OFTEN));
-	if (!info->chan)
-		tiled = 0;
-	else if (scanout && info->tiled_scanout)
-		tiled = 1;
 
-	/* calculate pitch align */
-	align = 64;
-	if (info->arch >= 0x50) {
-		if (scanout && !info->tiled_scanout)
-			align = 256;
-		else
+	if (info->arch >= NV_TESLA) {
+		tiled = 1;
+		align = 64;
+	}
+	else {
+		if (scanout)
 			tiled = 1;
+		align = 64;
 	}
 
 	*pitch = ALIGN(width * cpp, align);
 
 	if (tiled) {
-		if (info->arch >= 0xc0) {
+		if (info->arch >= NV_FERMI) {
 			if (height > 64)
-				tile_mode = 0x40;
+				cfg.nvc0.tile_mode = 0x0040;
 			else if (height > 32)
-				tile_mode = 0x30;
+				cfg.nvc0.tile_mode = 0x0030;
 			else if (height > 16)
-				tile_mode = 0x20;
+				cfg.nvc0.tile_mode = 0x0020;
 			else if (height > 8)
-				tile_mode = 0x10;
+				cfg.nvc0.tile_mode = 0x0010;
 			else
-				tile_mode = 0x00;
+				cfg.nvc0.tile_mode = 0x0000;
 
-			tile_flags = 0xfe00;
+			cfg.nvc0.memtype = 0x00fe;
 
-			align = NVC0_TILE_HEIGHT(tile_mode);
+			align = NVC0_TILE_HEIGHT(cfg.nvc0.tile_mode);
 			height = ALIGN(height, align);
 		}
-		else if (info->arch >= 0x50) {
+		else if (info->arch >= NV_TESLA) {
 			if (height > 32)
-				tile_mode = 4;
+				cfg.nv50.tile_mode = 0x0040;
 			else if (height > 16)
-				tile_mode = 3;
-			else if (height > 8)
-				tile_mode = 2;
-			else if (height > 4)
-				tile_mode = 1;
+				cfg.nv50.tile_mode = 0x0030;
+			else if (height >  8)
+				cfg.nv50.tile_mode = 0x0020;
+			else if (height >  4)
+				cfg.nv50.tile_mode = 0x0010;
 			else
-				tile_mode = 0;
+				cfg.nv50.tile_mode = 0x0000;
 
-			tile_flags = (scanout && cpp != 2) ? 0x7a00 : 0x7000;
+			cfg.nv50.memtype = (scanout && cpp != 2) ?
+					0x007a : 0x0070;
 
-			align = 1 << (tile_mode + 2);
+			align = NV50_TILE_HEIGHT(cfg.nv50.tile_mode);
 			height = ALIGN(height, align);
 		}
 		else {
@@ -141,36 +144,36 @@ static struct nouveau_bo *alloc_bo(struct nouveau_info *info,
 			align |= align >> 16;
 			align++;
 
-			align = MAX((info->dev->chipset >= 0x40) ? 1024 : 256,
-					align);
+			align = MAX((info->dev->chipset >= NV_ARCH_40) ?
+					1024 : 256, align);
 
 			/* adjust pitch */
 			*pitch = ALIGN(*pitch, align);
-
-			tile_mode = *pitch;
+			cfg.nv04.surf_pitch = *pitch;
 		}
 	}
 
-	if (cpp == 4)
-		tile_flags |= NOUVEAU_BO_TILE_32BPP;
-	else if (cpp == 2)
-		tile_flags |= NOUVEAU_BO_TILE_16BPP;
+	if (info->arch < NV_TESLA) {
+		if (cpp == 4)
+			cfg.nv04.surf_flags |= NV04_BO_32BPP;
+		else if (cpp == 2)
+			cfg.nv04.surf_flags |= NV04_BO_16BPP;
+	}
 
 	if (scanout)
-		tile_flags |= NOUVEAU_BO_TILE_SCANOUT;
+		flags |= NOUVEAU_BO_CONTIG;
 
-	if (nouveau_bo_new_tile(info->dev, flags, 0, *pitch * height,
-				tile_mode, tile_flags, &bo)) {
-		ALOGE("failed to allocate bo (flags 0x%x, size %d, tile_mode 0x%x, tile_flags 0x%x)",
-				flags, *pitch * height, tile_mode, tile_flags);
+	if (nouveau_bo_new(info->dev, flags, 0, *pitch * height, &cfg, &bo)) {
+		ALOGE("failed to allocate bo (flags 0x%x, size %d)",
+				flags, *pitch * height);
 		bo = NULL;
 	}
 
 	return bo;
 }
 
-static struct gralloc_drm_bo_t *
-nouveau_alloc(struct gralloc_drm_drv_t *drv, struct gralloc_drm_handle_t *handle)
+static struct gralloc_drm_bo_t *nouveau_alloc(struct gralloc_drm_drv_t *drv,
+		struct gralloc_drm_handle_t *handle)
 {
 	struct nouveau_info *info = (struct nouveau_info *) drv;
 	struct nouveau_buffer *nb;
@@ -187,7 +190,7 @@ nouveau_alloc(struct gralloc_drm_drv_t *drv, struct gralloc_drm_handle_t *handle
 		return NULL;
 
 	if (handle->name) {
-		if (nouveau_bo_handle_ref(info->dev, handle->name, &nb->bo)) {
+		if (nouveau_bo_name_ref(info->dev, handle->name, &nb->bo)) {
 			ALOGE("failed to create nouveau bo from name %u",
 					handle->name);
 			free(nb);
@@ -201,8 +204,8 @@ nouveau_alloc(struct gralloc_drm_drv_t *drv, struct gralloc_drm_handle_t *handle
 		height = handle->height;
 		gralloc_drm_align_geometry(handle->format, &width, &height);
 
-		nb->bo = alloc_bo(info, width, height,
-				cpp, handle->usage, &pitch);
+		nb->bo = alloc_bo(info, width, height, cpp,
+				  handle->usage, &pitch);
 		if (!nb->bo) {
 			ALOGE("failed to allocate nouveau bo %dx%dx%d",
 					handle->width, handle->height, cpp);
@@ -210,7 +213,7 @@ nouveau_alloc(struct gralloc_drm_drv_t *drv, struct gralloc_drm_handle_t *handle
 			return NULL;
 		}
 
-		if (nouveau_bo_handle_get(nb->bo,
+		if (nouveau_bo_name_get(nb->bo,
 					(uint32_t *) &handle->name)) {
 			ALOGE("failed to flink nouveau bo");
 			nouveau_bo_ref(NULL, &nb->bo);
@@ -241,6 +244,7 @@ static int nouveau_map(struct gralloc_drm_drv_t *drv,
 		struct gralloc_drm_bo_t *bo, int x, int y, int w, int h,
 		int enable_write, void **addr)
 {
+	struct nouveau_info *info = (struct nouveau_info *) drv;
 	struct nouveau_buffer *nb = (struct nouveau_buffer *) bo;
 	uint32_t flags;
 	int err;
@@ -250,7 +254,7 @@ static int nouveau_map(struct gralloc_drm_drv_t *drv,
 		flags |= NOUVEAU_BO_WR;
 
 	/* TODO if tiled, allocate a linear copy of bo in GART and map it */
-	err = nouveau_bo_map(nb->bo, flags);
+	err = nouveau_bo_map(nb->bo, flags, info->client);
 	if (!err)
 		*addr = nb->bo->map;
 
@@ -260,9 +264,7 @@ static int nouveau_map(struct gralloc_drm_drv_t *drv,
 static void nouveau_unmap(struct gralloc_drm_drv_t *drv,
 		struct gralloc_drm_bo_t *bo)
 {
-	struct nouveau_buffer *nb = (struct nouveau_buffer *) bo;
-	/* TODO if tiled, unmap the linear bo and copy back */
-	nouveau_bo_unmap(nb->bo);
+	/* The bo is implicitly unmapped at nouveau_bo_ref(NULL, bo) */
 }
 
 static void nouveau_init_kms_features(struct gralloc_drm_drv_t *drv,
@@ -280,7 +282,7 @@ static void nouveau_init_kms_features(struct gralloc_drm_drv_t *drv,
 	}
 
 	drm->mode_quirk_vmwgfx = 0;
-	drm->swap_mode = (info->chan) ? DRM_SWAP_FLIP : DRM_SWAP_SETCRTC;
+	drm->swap_mode = DRM_SWAP_FLIP;
 	drm->mode_sync_flip = 1;
 	drm->swap_interval = 1;
 	drm->vblank_secondary = 0;
@@ -290,9 +292,10 @@ static void nouveau_destroy(struct gralloc_drm_drv_t *drv)
 {
 	struct nouveau_info *info = (struct nouveau_info *) drv;
 
-	if (info->chan)
-		nouveau_channel_free(&info->chan);
-	nouveau_device_close(&info->dev);
+	nouveau_pushbuf_del(&info->pushbuf);
+	nouveau_object_del(&info->channel);
+	nouveau_client_del(&info->client);
+	nouveau_device_del(&info->dev);
 	free(info);
 }
 
@@ -300,31 +303,39 @@ static int nouveau_init(struct nouveau_info *info)
 {
 	int err = 0;
 
-	switch (info->dev->chipset & 0xf0) {
+	switch (info->dev->chipset & ~0xf) {
 	case 0x00:
-		info->arch = 0x04;
+		info->arch = NV_ARCH_04;
 		break;
 	case 0x10:
-		info->arch = 0x10;
+		info->arch = NV_ARCH_10;
 		break;
 	case 0x20:
-		info->arch = 0x20;
+		info->arch = NV_ARCH_20;
 		break;
 	case 0x30:
-		info->arch = 0x30;
+		info->arch = NV_ARCH_30;
 		break;
 	case 0x40:
 	case 0x60:
-		info->arch = 0x40;
+		info->arch = NV_ARCH_40;
 		break;
 	case 0x50:
 	case 0x80:
 	case 0x90:
 	case 0xa0:
-		info->arch = 0x50;
+		info->arch = NV_TESLA;
 		break;
 	case 0xc0:
-		info->arch = 0xc0;
+	case 0xd0:
+		info->arch = NV_FERMI;
+		break;
+	case 0xe0:
+	case 0xf0:
+		info->arch = NV_KEPLER;
+		break;
+	case 0x110:
+		info->arch = NV_MAXWELL;
 		break;
 	default:
 		ALOGE("unknown nouveau chipset 0x%x", info->dev->chipset);
@@ -332,41 +343,78 @@ static int nouveau_init(struct nouveau_info *info)
 		break;
 	}
 
-	info->tiled_scanout = (info->chan != NULL);
+	if (info->dev->drm_version < 0x01000000 && info->dev->chipset >= 0xc0) {
+		ALOGE("nouveau kernel module is too old 0x%x",
+		      info->dev->drm_version);
+		err = -EINVAL;
+	}
 
 	return err;
 }
 
-struct gralloc_drm_drv_t *gralloc_drm_drv_create_for_nouveau(int fd)
+struct gralloc_drm_drv_t *
+gralloc_drm_drv_create_for_nouveau(int fd)
 {
 	struct nouveau_info *info;
-	int err;
+	struct nv04_fifo nv04_data = { .vram = 0xbeef0201, .gart = 0xbeef0202 };
+	struct nvc0_fifo nvc0_data = { };
+	int size, err;
+	void *data;
 
 	info = calloc(1, sizeof(*info));
 	if (!info)
 		return NULL;
 
 	info->fd = fd;
-	err = nouveau_device_open_existing(&info->dev, 0, info->fd, 0);
+	err = nouveau_device_wrap(fd, 0, &info->dev);
 	if (err) {
-		ALOGE("failed to create nouveau device");
+		ALOGE("failed to wrap existing nouveau device");
 		free(info);
 		return NULL;
 	}
 
-	err = nouveau_channel_alloc(info->dev, NvDmaFB, NvDmaTT,
-			24 * 1024, &info->chan);
-	if (err) {
-		/* make it non-fatal temporarily as it may require firmwares */
-		ALOGW("failed to create nouveau channel");
-		info->chan = NULL;
-	}
-
 	err = nouveau_init(info);
 	if (err) {
-		if (info->chan)
-			nouveau_channel_free(&info->chan);
-		nouveau_device_close(&info->dev);
+		free(info);
+		return NULL;
+	}
+
+	err = nouveau_client_new(info->dev, &info->client);
+	if (err) {
+		ALOGW("failed to create nouveau client: %d", err);
+		nouveau_device_del(&info->dev);
+		free(info);
+		return NULL;
+	}
+
+	if (info->dev->chipset < 0xc0) {
+		data = &nv04_data;
+		size = sizeof(nv04_data);
+	}
+	else {
+		data = &nvc0_data;
+		size = sizeof(nvc0_data);
+	}
+
+	err = nouveau_object_new(&info->dev->object, 0,
+			NOUVEAU_FIFO_CHANNEL_CLASS, data, size,
+			&info->channel);
+
+	if (err) {
+		ALOGE("failed to create nouveau channel: %d", err);
+		nouveau_client_del(&info->client);
+		nouveau_device_del(&info->dev);
+		free(info);
+		return NULL;
+	}
+
+	err = nouveau_pushbuf_new(info->client, info->channel,
+			4, 32 * 1024, true, &info->pushbuf);
+	if (err) {
+		ALOGE("failed to allocate DMA push buffer: %d", err);
+		nouveau_object_del(&info->channel);
+		nouveau_client_del(&info->client);
+		nouveau_device_del(&info->dev);
 		free(info);
 		return NULL;
 	}
