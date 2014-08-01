@@ -387,15 +387,17 @@ static void pipe_destroy(struct gralloc_drm_drv_t *drv)
 
 static int pipe_init_screen(struct pipe_manager *pm)
 {
-	struct pipe_screen *screen = NULL;
+	struct pipe_screen *screen;
 
 #ifdef ENABLE_PIPE_FREEDRENO
 	if (strcmp(pm->driver, "msm"))
 		screen = fd_drm_screen_create(pm->fd);
+	else
 #endif
 #ifdef ENABLE_PIPE_NOUVEAU
 	if (strcmp(pm->driver, "nouveau") == 0)
 		screen = nouveau_drm_screen_create(pm->fd);
+	else
 #endif
 #ifdef ENABLE_PIPE_R300
 	if (strcmp(pm->driver, "r300") == 0) {
@@ -407,6 +409,7 @@ static int pipe_init_screen(struct pipe_manager *pm)
 				sws->destroy(sws);
 		}
 	}
+	else
 #endif
 #ifdef ENABLE_PIPE_R600
 	if (strcmp(pm->driver, "r600") == 0) {
@@ -418,6 +421,7 @@ static int pipe_init_screen(struct pipe_manager *pm)
 				sws->destroy(sws);
 		}
 	}
+	else
 #endif
 #ifdef ENABLE_PIPE_VMWGFX
 	if (strcmp(pm->driver, "vmwgfx") == 0) {
@@ -430,7 +434,9 @@ static int pipe_init_screen(struct pipe_manager *pm)
 				sws->destroy(sws);
 		}
 	}
+	else
 #endif
+		screen = NULL;
 
 	if (!screen) {
 		ALOGW("failed to create screen for %s", pm->driver);
