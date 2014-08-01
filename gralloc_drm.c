@@ -73,6 +73,10 @@ init_drv_from_fd(int fd)
 		ALOGI_IF(drv, "create pipe for driver %s", version->name);
 #endif
 
+#ifdef ENABLE_FREEDRENO
+		if (!drv && !strcmp(version->name, "msm"))
+			drv = gralloc_drm_drv_create_for_freedreno(fd);
+#endif
 #ifdef ENABLE_INTEL
 		if (!drv && !strcmp(version->name, "i915")) {
 			drv = gralloc_drm_drv_create_for_intel(fd);

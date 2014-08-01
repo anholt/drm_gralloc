@@ -368,6 +368,8 @@ static void pipe_destroy(struct gralloc_drm_drv_t *drv)
 	FREE(pm);
 }
 
+/* for freedreno */
+#include "freedreno/drm/freedreno_drm_public.h"
 /* for nouveau */
 #include "nouveau/drm/nouveau_drm_public.h"
 /* for r300 */
@@ -387,6 +389,10 @@ static int pipe_init_screen(struct pipe_manager *pm)
 {
 	struct pipe_screen *screen = NULL;
 
+#ifdef ENABLE_PIPE_FREEDRENO
+	if (strcmp(pm->driver, "msm"))
+		screen = fd_drm_screen_create(pm->fd);
+#endif
 #ifdef ENABLE_PIPE_NOUVEAU
 	if (strcmp(pm->driver, "nouveau") == 0)
 		screen = nouveau_drm_screen_create(pm->fd);
@@ -518,6 +524,10 @@ static int pipe_find_driver(struct pipe_manager *pm, const char *name)
 	else {
 		if (strcmp(name, "vmwgfx") == 0) {
 			driver = "vmwgfx";
+			err = 0;
+		}
+		if (strcmp(name, "msm") == 0) {
+			driver = "msm";
 			err = 0;
 		}
 	}
