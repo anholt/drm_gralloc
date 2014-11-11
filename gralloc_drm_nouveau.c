@@ -51,6 +51,14 @@
 #define NV50_TILE_HEIGHT(m) (4 << ((m) >> 4))
 #define NVC0_TILE_HEIGHT(m) (8 << ((m) >> 4))
 
+
+// Comment out the following to switch between the "sw_indicator disables all
+// tiling" and "sw_indicator zeroes the tile|surf_flags (object tiling?)".
+// Does the latter even make sense ... ? Going through the kernel on the
+// topic is slightly annoying :\
+
+#define SW_INDICATOR_FULLY_DISABLES_TILING
+
 struct nouveau_info {
 	struct gralloc_drm_drv_t base;
 
@@ -74,7 +82,7 @@ static struct nouveau_bo *alloc_bo(struct nouveau_info *info,
 	struct nouveau_bo *bo = NULL;
 	union nouveau_bo_config cfg = {};
 	int flags;
-	int tiled, scanout;
+	int tiled, scanout, sw_indicator;
 	unsigned int align;
 
 	flags = NOUVEAU_BO_MAP | NOUVEAU_BO_VRAM;
@@ -83,6 +91,9 @@ static struct nouveau_bo *alloc_bo(struct nouveau_info *info,
 
 	tiled = !(usage & (GRALLOC_USAGE_SW_READ_OFTEN |
 			   GRALLOC_USAGE_SW_WRITE_OFTEN));
+
+	sw_indicator = (usage & (GRALLOC_USAGE_SW_READ_OFTEN |
+				 GRALLOC_USAGE_SW_WRITE_OFTEN));
 
 	if (info->arch >= NV_TESLA) {
 		tiled = 1;
@@ -109,7 +120,12 @@ static struct nouveau_bo *alloc_bo(struct nouveau_info *info,
 			else
 				cfg.nvc0.tile_mode = 0x0000;
 
-			cfg.nvc0.memtype = 0x00fe;
+#ifndef SW_INDICATOR_FULLY_DISABLES_TILING
+			if (sw_indicator)
+				cfg.nvc0.memtype = 0x0000;
+			else
+#endif
+				cfg.nvc0.memtype = 0x00fe;
 
 			align = NVC0_TILE_HEIGHT(cfg.nvc0.tile_mode);
 			height = ALIGN(height, align);
@@ -126,8 +142,13 @@ static struct nouveau_bo *alloc_bo(struct nouveau_info *info,
 			else
 				cfg.nv50.tile_mode = 0x0000;
 
-			cfg.nv50.memtype = (scanout && cpp != 2) ?
-					0x007a : 0x0070;
+#ifndef SW_INDICATOR_FULLY_DISABLES_TILING
+			if (sw_indicator)
+				cfg.nv50.memtype = 0x0000;
+			else
+#endif
+				cfg.nv50.memtype = (scanout && cpp != 2) ?
+						0x007a : 0x0070;
 
 			align = NV50_TILE_HEIGHT(cfg.nv50.tile_mode);
 			height = ALIGN(height, align);
@@ -154,6 +175,11 @@ static struct nouveau_bo *alloc_bo(struct nouveau_info *info,
 	}
 
 	if (info->arch < NV_TESLA) {
+#ifndef SW_INDICATOR_FULLY_DISABLES_TILING
+		if (sw_indicator)
+			cfg.nv04.surf_flags = 0x0000;
+		else
+#endif
 		if (cpp == 4)
 			cfg.nv04.surf_flags |= NV04_BO_32BPP;
 		else if (cpp == 2)
@@ -163,7 +189,11 @@ static struct nouveau_bo *alloc_bo(struct nouveau_info *info,
 	if (scanout)
 		flags |= NOUVEAU_BO_CONTIG;
 
+#ifdef SW_INDICATOR_FULLY_DISABLES_TILING
+	if (nouveau_bo_new(info->dev, flags, 0, *pitch * height, NULL, &bo)) {
+#else
 	if (nouveau_bo_new(info->dev, flags, 0, *pitch * height, &cfg, &bo)) {
+#endif
 		ALOGE("failed to allocate bo (flags 0x%x, size %d)",
 				flags, *pitch * height);
 		bo = NULL;
