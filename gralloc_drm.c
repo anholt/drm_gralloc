@@ -70,26 +70,31 @@ init_drv_from_fd(int fd)
 	if (version->name) {
 #ifdef ENABLE_PIPE
 		drv = gralloc_drm_drv_create_for_pipe(fd, version->name);
+		ALOGI_IF(drv, "create pipe for driver %s", version->name);
 #endif
 
 #ifdef ENABLE_INTEL
-		if (!drv && !strcmp(version->name, "i915"))
+		if (!drv && !strcmp(version->name, "i915")) {
 			drv = gralloc_drm_drv_create_for_intel(fd);
+			ALOGI_IF(drv, "create intel for driver i915");
+		}
 #endif
 #ifdef ENABLE_RADEON
-		if (!drv && !strcmp(version->name, "radeon"))
+		if (!drv && !strcmp(version->name, "radeon")) {
 			drv = gralloc_drm_drv_create_for_radeon(fd);
+			ALOGI_IF(drv, "create radeon for driver radeon");
+		}
 #endif
 #ifdef ENABLE_NOUVEAU
-		if (!drv && !strcmp(version->name, "nouveau"))
+		if (!drv && !strcmp(version->name, "nouveau")) {
 			drv = gralloc_drm_drv_create_for_nouveau(fd);
+			ALOGI_IF(drv, "create nouveau for driver nouveau");
+		}
 #endif
 	}
 
-	if (!drv) {
-		ALOGE("unsupported driver: %s", (version->name) ?
-				version->name : "NULL");
-	}
+	ALOGE_IF(!drv, "unsupported driver: %s", (version->name) ?
+			version->name : "NULL");
 
 	drmFreeVersion(version);
 
