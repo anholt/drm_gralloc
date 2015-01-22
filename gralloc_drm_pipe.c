@@ -401,25 +401,19 @@ static int pipe_init_screen(struct pipe_manager *pm)
 #endif
 #ifdef ENABLE_PIPE_R300
 	if (strcmp(pm->driver, "r300") == 0) {
-		struct radeon_winsys *sws = radeon_drm_winsys_create(pm->fd);
+		struct radeon_winsys *sws =
+			radeon_drm_winsys_create(pm->fd, r300_screen_create);
 
-		if (sws) {
-			screen = r300_screen_create(sws);
-			if (!screen)
-				sws->destroy(sws);
-		}
+		screen = sws ? sws->screen : NULL;
 	}
 	else
 #endif
 #ifdef ENABLE_PIPE_R600
 	if (strcmp(pm->driver, "r600") == 0) {
-		struct radeon_winsys *sws = radeon_drm_winsys_create(pm->fd);
+		struct radeon_winsys *sws =
+			radeon_drm_winsys_create(pm->fd, r600_screen_create);
 
-		if (sws) {
-			screen = r600_screen_create(sws);
-			if (!screen)
-				sws->destroy(sws);
-		}
+		screen = sws ? sws->screen : NULL;
 	}
 	else
 #endif
@@ -428,18 +422,14 @@ static int pipe_init_screen(struct pipe_manager *pm)
 		struct svga_winsys_screen *sws =
 			svga_drm_winsys_screen_create(pm->fd);
 
-		if (sws) {
-			screen = svga_screen_create(sws);
-			if (!screen)
-				sws->destroy(sws);
-		}
+		screen = sws ? svga_screen_create(sws) : NULL;
 	}
 	else
 #endif
 		screen = NULL;
 
 	if (!screen) {
-		ALOGW("failed to create screen for %s", pm->driver);
+		ALOGW("failed to create pipe screen for %s", pm->driver);
 		return -EINVAL;
 	}
 

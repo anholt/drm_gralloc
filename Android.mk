@@ -153,7 +153,9 @@ LOCAL_C_INCLUDES += \
 endif
 
 LOCAL_STATIC_LIBRARIES += \
-	libmesa_gallium
+	libmesa_gallium \
+	libmesa_util \
+
 LOCAL_SHARED_LIBRARIES += libdl
 endif # DRM_USES_PIPE
 include $(BUILD_SHARED_LIBRARY)
