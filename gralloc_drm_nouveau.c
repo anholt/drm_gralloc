@@ -57,7 +57,7 @@
 // Does the latter even make sense ... ? Going through the kernel on the
 // topic is slightly annoying :\
 
-#define SW_INDICATOR_FULLY_DISABLES_TILING
+#undef SW_INDICATOR_FULLY_DISABLES_TILING
 
 struct nouveau_info {
 	struct gralloc_drm_drv_t base;
