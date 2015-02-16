@@ -26,6 +26,8 @@
 #include <cutils/log.h>
 #include <errno.h>
 
+#include <svga_types.h>
+#include <svga3d_types.h>
 #include <pipe/p_screen.h>
 #include <pipe/p_context.h>
 #include <state_tracker/drm_driver.h>
@@ -60,19 +62,19 @@ static enum pipe_format get_pipe_format(int format)
 
 	switch (format) {
 	case HAL_PIXEL_FORMAT_RGBA_8888:
-		fmt = PIPE_FORMAT_R8G8B8A8_UNORM;
+		fmt = SVGA3D_A8R8G8B8;
 		break;
 	case HAL_PIXEL_FORMAT_RGBX_8888:
-		fmt = PIPE_FORMAT_R8G8B8X8_UNORM;
+		fmt = SVGA3D_X8R8G8B8;
 		break;
 	case HAL_PIXEL_FORMAT_RGB_888:
 		fmt = PIPE_FORMAT_R8G8B8_UNORM;
 		break;
 	case HAL_PIXEL_FORMAT_RGB_565:
-		fmt = PIPE_FORMAT_B5G6R5_UNORM;
+		fmt = SVGA3D_R5G6B5;
 		break;
 	case HAL_PIXEL_FORMAT_BGRA_8888:
-		fmt = PIPE_FORMAT_B8G8R8A8_UNORM;
+		fmt = SVGA3D_A8R8G8B8;
 		break;
 	case HAL_PIXEL_FORMAT_YV12:
 	case HAL_PIXEL_FORMAT_DRM_NV12:
