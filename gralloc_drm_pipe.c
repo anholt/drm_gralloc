@@ -26,6 +26,8 @@
 #include <cutils/log.h>
 #include <errno.h>
 
+#include <svga_types.h>
+#include <svga3d_types.h>
 #include <pipe/p_screen.h>
 #include <pipe/p_context.h>
 #include <state_tracker/drm_driver.h>
@@ -60,19 +62,19 @@ static enum pipe_format get_pipe_format(int format)
 
 	switch (format) {
 	case HAL_PIXEL_FORMAT_RGBA_8888:
-		fmt = PIPE_FORMAT_R8G8B8A8_UNORM;
+		fmt = SVGA3D_A8R8G8B8;
 		break;
 	case HAL_PIXEL_FORMAT_RGBX_8888:
-		fmt = PIPE_FORMAT_R8G8B8X8_UNORM;
+		fmt = SVGA3D_X8R8G8B8;
 		break;
 	case HAL_PIXEL_FORMAT_RGB_888:
 		fmt = PIPE_FORMAT_R8G8B8_UNORM;
 		break;
 	case HAL_PIXEL_FORMAT_RGB_565:
-		fmt = PIPE_FORMAT_B5G6R5_UNORM;
+		fmt = SVGA3D_R5G6B5;
 		break;
 	case HAL_PIXEL_FORMAT_BGRA_8888:
-		fmt = PIPE_FORMAT_B8G8R8A8_UNORM;
+		fmt = SVGA3D_A8R8G8B8;
 		break;
 	case HAL_PIXEL_FORMAT_YV12:
 	case HAL_PIXEL_FORMAT_DRM_NV12:
@@ -368,6 +370,8 @@ static void pipe_destroy(struct gralloc_drm_drv_t *drv)
 	FREE(pm);
 }
 
+/* for freedreno */
+#include "freedreno/drm/freedreno_drm_public.h"
 /* for nouveau */
 #include "nouveau/drm/nouveau_drm_public.h"
 /* for r300 */
@@ -385,49 +389,49 @@ static void pipe_destroy(struct gralloc_drm_drv_t *drv)
 
 static int pipe_init_screen(struct pipe_manager *pm)
 {
-	struct pipe_screen *screen = NULL;
+	struct pipe_screen *screen;
 
+#ifdef ENABLE_PIPE_FREEDRENO
+	if (strcmp(pm->driver, "msm"))
+		screen = fd_drm_screen_create(pm->fd);
+	else
+#endif
 #ifdef ENABLE_PIPE_NOUVEAU
 	if (strcmp(pm->driver, "nouveau") == 0)
 		screen = nouveau_drm_screen_create(pm->fd);
+	else
 #endif
 #ifdef ENABLE_PIPE_R300
 	if (strcmp(pm->driver, "r300") == 0) {
-		struct radeon_winsys *sws = radeon_drm_winsys_create(pm->fd);
+		struct radeon_winsys *sws =
+			radeon_drm_winsys_create(pm->fd, r300_screen_create);
 
-		if (sws) {
-			screen = r300_screen_create(sws);
-			if (!screen)
-				sws->destroy(sws);
-		}
+		screen = sws ? sws->screen : NULL;
 	}
+	else
 #endif
 #ifdef ENABLE_PIPE_R600
 	if (strcmp(pm->driver, "r600") == 0) {
-		struct radeon_winsys *sws = radeon_drm_winsys_create(pm->fd);
+		struct radeon_winsys *sws =
+			radeon_drm_winsys_create(pm->fd, r600_screen_create);
 
-		if (sws) {
-			screen = r600_screen_create(sws);
-			if (!screen)
-				sws->destroy(sws);
-		}
+		screen = sws ? sws->screen : NULL;
 	}
+	else
 #endif
 #ifdef ENABLE_PIPE_VMWGFX
 	if (strcmp(pm->driver, "vmwgfx") == 0) {
 		struct svga_winsys_screen *sws =
 			svga_drm_winsys_screen_create(pm->fd);
 
-		if (sws) {
-			screen = svga_screen_create(sws);
-			if (!screen)
-				sws->destroy(sws);
-		}
+		screen = sws ? svga_screen_create(sws) : NULL;
 	}
+	else
 #endif
+		screen = NULL;
 
 	if (!screen) {
-		ALOGW("failed to create screen for %s", pm->driver);
+		ALOGW("failed to create pipe screen for %s", pm->driver);
 		return -EINVAL;
 	}
 
@@ -518,6 +522,10 @@ static int pipe_find_driver(struct pipe_manager *pm, const char *name)
 	else {
 		if (strcmp(name, "vmwgfx") == 0) {
 			driver = "vmwgfx";
+			err = 0;
+		}
+		if (strcmp(name, "msm") == 0) {
+			driver = "msm";
 			err = 0;
 		}
 	}

@@ -23,6 +23,7 @@
 
 DRM_GPU_DRIVERS := $(strip $(filter-out swrast, $(BOARD_GPU_DRIVERS)))
 
+freedreno_drivers := freedreno
 intel_drivers := i915 i965 i915g ilo
 radeon_drivers := r300g r600g
 nouveau_drivers := nouveau
@@ -30,6 +31,7 @@ vmwgfx_drivers := vmwgfx
 
 valid_drivers := \
 	prebuilt \
+	$(freedreno_drivers) \
 	$(intel_drivers) \
 	$(radeon_drivers) \
 	$(nouveau_drivers) \
@@ -81,6 +83,8 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := libgralloc_drm
 LOCAL_MODULE_TAGS := optional
 
+LOCAL_CFLAGS := -std=c99
+
 LOCAL_SRC_FILES := \
 	gralloc_drm.c \
 	gralloc_drm_kms.c
@@ -94,6 +98,13 @@ LOCAL_SHARED_LIBRARIES := \
 	liblog \
 	libcutils \
 	libhardware_legacy \
+
+ifneq ($(filter $(freedreno_drivers), $(DRM_GPU_DRIVERS)),)
+LOCAL_SRC_FILES += gralloc_drm_freedreno.c
+LOCAL_C_INCLUDES += external/drm/freedreno
+LOCAL_CFLAGS += -DENABLE_FREEDRENO
+LOCAL_SHARED_LIBRARIES += libdrm_freedreno
+endif
 
 ifneq ($(filter $(intel_drivers), $(DRM_GPU_DRIVERS)),)
 LOCAL_SRC_FILES += gralloc_drm_intel.c
@@ -121,6 +132,7 @@ LOCAL_SRC_FILES += gralloc_drm_pipe.c
 LOCAL_CFLAGS += -DENABLE_PIPE
 LOCAL_C_INCLUDES += \
 	external/mesa/include \
+	external/mesa/src \
 	external/mesa/src/gallium/include \
 	external/mesa/src/gallium/winsys \
 	external/mesa/src/gallium/drivers \
@@ -144,7 +156,9 @@ LOCAL_C_INCLUDES += \
 endif
 
 LOCAL_STATIC_LIBRARIES += \
-	libmesa_gallium
+	libmesa_gallium \
+	libmesa_util \
+
 LOCAL_SHARED_LIBRARIES += libdl
 endif # DRM_USES_PIPE
 include $(BUILD_SHARED_LIBRARY)
