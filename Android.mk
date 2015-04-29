@@ -130,14 +130,6 @@ LOCAL_C_INCLUDES += \
 	external/mesa/src/gallium/drivers \
 	external/mesa/src/gallium/auxiliary
 
-ifneq ($(filter r600g, $(DRM_GPU_DRIVERS)),)
-LOCAL_CFLAGS += -DENABLE_PIPE_R600
-LOCAL_SHARED_LIBRARIES += libstlport
-LOCAL_STATIC_LIBRARIES += \
-	libmesa_pipe_r600 \
-	libmesa_pipe_radeon \
-	libmesa_winsys_radeon
-endif
 ifneq ($(filter vmwgfx, $(DRM_GPU_DRIVERS)),)
 LOCAL_CFLAGS += -DENABLE_PIPE_VMWGFX
 LOCAL_STATIC_LIBRARIES += \
