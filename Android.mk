@@ -89,10 +89,6 @@ LOCAL_SRC_FILES := \
 	gralloc_drm.c \
 	gralloc_drm_kms.c
 
-LOCAL_C_INCLUDES := \
-	external/drm \
-	external/drm/include/drm
-
 LOCAL_SHARED_LIBRARIES := \
 	libdrm \
 	liblog \
@@ -101,28 +97,24 @@ LOCAL_SHARED_LIBRARIES := \
 
 ifneq ($(filter $(freedreno_drivers), $(DRM_GPU_DRIVERS)),)
 LOCAL_SRC_FILES += gralloc_drm_freedreno.c
-LOCAL_C_INCLUDES += external/drm/freedreno
 LOCAL_CFLAGS += -DENABLE_FREEDRENO
 LOCAL_SHARED_LIBRARIES += libdrm_freedreno
 endif
 
 ifneq ($(filter $(intel_drivers), $(DRM_GPU_DRIVERS)),)
 LOCAL_SRC_FILES += gralloc_drm_intel.c
-LOCAL_C_INCLUDES += external/drm/intel
 LOCAL_CFLAGS += -DENABLE_INTEL
 LOCAL_SHARED_LIBRARIES += libdrm_intel
 endif
 
 ifneq ($(filter $(radeon_drivers), $(DRM_GPU_DRIVERS)),)
 LOCAL_SRC_FILES += gralloc_drm_radeon.c
-LOCAL_C_INCLUDES += external/drm/radeon
 LOCAL_CFLAGS += -DENABLE_RADEON
 LOCAL_SHARED_LIBRARIES += libdrm_radeon
 endif
 
 ifneq ($(filter $(nouveau_drivers), $(DRM_GPU_DRIVERS)),)
 LOCAL_SRC_FILES += gralloc_drm_nouveau.c
-LOCAL_C_INCLUDES += external/drm/nouveau
 LOCAL_CFLAGS += -DENABLE_NOUVEAU
 LOCAL_SHARED_LIBRARIES += libdrm_nouveau
 endif
@@ -138,14 +130,6 @@ LOCAL_C_INCLUDES += \
 	external/mesa/src/gallium/drivers \
 	external/mesa/src/gallium/auxiliary
 
-ifneq ($(filter r600g, $(DRM_GPU_DRIVERS)),)
-LOCAL_CFLAGS += -DENABLE_PIPE_R600
-LOCAL_SHARED_LIBRARIES += libstlport
-LOCAL_STATIC_LIBRARIES += \
-	libmesa_pipe_r600 \
-	libmesa_pipe_radeon \
-	libmesa_winsys_radeon
-endif
 ifneq ($(filter vmwgfx, $(DRM_GPU_DRIVERS)),)
 LOCAL_CFLAGS += -DENABLE_PIPE_VMWGFX
 LOCAL_STATIC_LIBRARIES += \
@@ -168,12 +152,9 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES := \
 	gralloc.c \
 
-LOCAL_C_INCLUDES := \
-	external/drm \
-	external/drm/include/drm \
-
 LOCAL_SHARED_LIBRARIES := \
 	libgralloc_drm \
+	libdrm \
 	liblog \
 
 # for glFlush/glFinish
