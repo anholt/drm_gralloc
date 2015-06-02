@@ -99,6 +99,12 @@ init_drv_from_fd(int fd)
 			ALOGI_IF(drv, "create nouveau for driver nouveau");
 		} else
 #endif
+#ifdef ENABLE_VC4
+		if (!strcmp(version->name, "vc4")) {
+			drv = gralloc_drm_drv_create_for_vc4(fd);
+			ALOGI_IF(drv, "create freedreno for driver vc4");
+		} else
+#endif
 		if (!drv) {
 			ALOGE("unsupported driver: %s", (version->name) ?
 					version->name : "NULL");

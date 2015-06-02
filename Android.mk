@@ -27,6 +27,7 @@ freedreno_drivers := freedreno
 intel_drivers := i915 i965 i915g ilo
 radeon_drivers := r300g r600g radeonsi
 nouveau_drivers := nouveau
+vc4_drivers := vc4
 vmwgfx_drivers := vmwgfx
 
 valid_drivers := \
@@ -35,6 +36,7 @@ valid_drivers := \
 	$(intel_drivers) \
 	$(radeon_drivers) \
 	$(nouveau_drivers) \
+	$(vc4_drivers) \
 	$(vmwgfx_drivers)
 
 # warn about invalid drivers
@@ -117,6 +119,11 @@ ifneq ($(filter $(nouveau_drivers), $(DRM_GPU_DRIVERS)),)
 LOCAL_SRC_FILES += gralloc_drm_nouveau.c
 LOCAL_CFLAGS += -DENABLE_NOUVEAU
 LOCAL_SHARED_LIBRARIES += libdrm_nouveau
+endif
+
+ifneq ($(filter $(vc4_drivers), $(DRM_GPU_DRIVERS)),)
+LOCAL_SRC_FILES += gralloc_drm_vc4.c
+LOCAL_CFLAGS += -DENABLE_VC4
 endif
 
 ifeq ($(strip $(DRM_USES_PIPE)),true)

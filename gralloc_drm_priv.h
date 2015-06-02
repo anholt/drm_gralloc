@@ -202,6 +202,7 @@ struct gralloc_drm_drv_t *gralloc_drm_drv_create_for_freedreno(int fd);
 struct gralloc_drm_drv_t *gralloc_drm_drv_create_for_intel(int fd);
 struct gralloc_drm_drv_t *gralloc_drm_drv_create_for_radeon(int fd);
 struct gralloc_drm_drv_t *gralloc_drm_drv_create_for_nouveau(int fd);
+struct gralloc_drm_drv_t *gralloc_drm_drv_create_for_vc4(int fd);
 
 #ifdef __cplusplus
 }
