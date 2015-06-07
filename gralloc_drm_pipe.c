@@ -77,7 +77,6 @@ static enum pipe_format get_pipe_format(int format)
 		fmt = SVGA3D_A8R8G8B8;
 		break;
 	case HAL_PIXEL_FORMAT_YV12:
-	case HAL_PIXEL_FORMAT_DRM_NV12:
 	case HAL_PIXEL_FORMAT_YCbCr_422_SP:
 	case HAL_PIXEL_FORMAT_YCrCb_420_SP:
 	default:
