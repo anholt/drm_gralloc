@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <sys/mman.h>
 #include <drm.h>
+#include "vc4_drm.h"
 
 #include "gralloc_drm.h"
 #include "gralloc_drm_priv.h"
